@@ -1,23 +1,18 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
   subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Jung's Research Assistant",
-  description: "논문 검색, 요약, 인용, 참고문헌 정리 등 리서치에 특화된 AI 어시스턴트",
-  keywords: ["논문", "리서치", "AI", "Research Assistant", "논문 검색", "논문 요약", "참고문헌"],
-  authors: [{ name: "Jung's Research Assistant" }],
+  title: "General Assistant",
+  description: "AI-powered general assistant ready to help with questions, tasks, explanations, and whatever you need assistance with",
+  keywords: ["AI", "assistant", "General Assistant", "help", "questions", "tasks", "chatbot"],
+  authors: [{ name: "General Assistant" }],
   robots: "index, follow",
 };
 
@@ -32,7 +27,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko">
+    <html lang="en">
       <head>
         {/* Google Analytics */}
         <Script
@@ -49,7 +44,7 @@ export default function RootLayout({
         </Script>
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${inter.className} antialiased font-medium`}
       >
         {children}
       </body>

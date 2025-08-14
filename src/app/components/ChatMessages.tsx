@@ -88,25 +88,37 @@ export default function ChatMessages({ messages }: Props) {
               {/* 메시지 버블 */}
               <div className={`px-4 py-3 rounded-2xl max-w-full ${
                 msg.role === 'user'
-                  ? 'bg-primary text-primary-foreground rounded-br-md'
+                  ? 'bg-primary text-white rounded-br-md'
                   : 'bg-muted text-foreground rounded-bl-md'
               }`}>
-                <div className="prose prose-invert max-w-none prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground">
+                <div className={`prose max-w-none ${
+                  msg.role === 'user'
+                    ? 'prose-headings:text-white prose-p:text-white prose-li:text-white prose-strong:text-white'
+                    : 'prose-invert prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground'
+                }`}>
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     rehypePlugins={rehypeRaw ? [rehypeRaw] : []}
                     components={{
                       h1: ({ node, ...props }) => (
-                        <h1 {...props} className="text-lg font-bold mb-3 mt-4 first:mt-0 text-foreground" />
+                        <h1 {...props} className={`text-lg font-bold mb-3 mt-4 first:mt-0 ${
+                          msg.role === 'user' ? 'text-white' : 'text-foreground'
+                        }`} />
                       ),
                       h2: ({ node, ...props }) => (
-                        <h2 {...props} className="text-base font-semibold mb-2 mt-3 first:mt-0 text-foreground" />
+                        <h2 {...props} className={`text-base font-semibold mb-2 mt-3 first:mt-0 ${
+                          msg.role === 'user' ? 'text-white' : 'text-foreground'
+                        }`} />
                       ),
                       h3: ({ node, ...props }) => (
-                        <h3 {...props} className="text-sm font-semibold mb-2 mt-3 first:mt-0 text-foreground" />
+                        <h3 {...props} className={`text-sm font-semibold mb-2 mt-3 first:mt-0 ${
+                          msg.role === 'user' ? 'text-white' : 'text-foreground'
+                        }`} />
                       ),
                       p: ({ node, ...props }) => (
-                        <p {...props} className="mb-3 last:mb-0 text-foreground leading-relaxed" />
+                        <p {...props} className={`mb-3 last:mb-0 leading-relaxed ${
+                          msg.role === 'user' ? 'text-white' : 'text-foreground'
+                        }`} />
                       ),
                       ul: ({ node, ...props }) => (
                         <ul {...props} className="mb-3 pl-4 space-y-1" />
@@ -115,10 +127,14 @@ export default function ChatMessages({ messages }: Props) {
                         <ol {...props} className="mb-3 pl-4 space-y-1" />
                       ),
                       li: ({ node, ...props }) => (
-                        <li {...props} className="text-foreground leading-relaxed" />
+                        <li {...props} className={`leading-relaxed ${
+                          msg.role === 'user' ? 'text-white' : 'text-foreground'
+                        }`} />
                       ),
                       strong: ({ node, ...props }) => (
-                        <strong {...props} className="font-semibold text-foreground" />
+                        <strong {...props} className={`font-semibold ${
+                          msg.role === 'user' ? 'text-white' : 'text-foreground'
+                        }`} />
                       ),
                       a: ({ node, ...props }) => (
                         <a

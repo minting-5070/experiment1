@@ -1,174 +1,211 @@
 // Edge runtime provides native fetch
+import { SYSTEM_MESSAGE } from './system-message';
 
 export const runtime = 'edge';
 
 export async function POST(req: Request) {
   const { messages } = await req.json();
 
-  // Perplexity API는 system 메시지 이후로 user/assistant가 번갈아가며 등장해야 합니다.
-  // useChat이 전달하는 messages 배열에는 사용자가 연속으로 입력한 경우 user 메시지가 연달아 있을 수 있으므로
-  // 동일 role이 연속될 경우 내용을 합쳐 하나로 병합한 후 전송합니다.
+  // 환경변수 디버깅
+  const apiKey = process.env.OPENAI_API_KEY;
+  console.log('OPENAI_API_KEY exists:', !!apiKey);
+  console.log('OPENAI_API_KEY length:', apiKey?.length || 0);
+  
+  if (!apiKey) {
+    return new Response('OpenAI API key is not configured', {
+      status: 200,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    });
+  }
 
+  // 메시지 병합 로직
   const mergedMessages = [] as typeof messages;
   for (const msg of messages) {
     if (mergedMessages.length > 0 && mergedMessages[mergedMessages.length - 1].role === msg.role) {
-      // 같은 role: 내용 이어붙이기 (줄바꿈)
       mergedMessages[mergedMessages.length - 1].content += '\n' + msg.content;
     } else {
       mergedMessages.push({ ...msg });
     }
   }
 
-  const response = await fetch('https://api.perplexity.ai/chat/completions', {
+  const systemMessage = {
+    role: 'system' as const,
+    content: SYSTEM_MESSAGE
+  };
+
+  const formattedInput = [
+    systemMessage,
+    ...mergedMessages.map((m: { role: string; content: string }) => ({
+      role: m.role,
+      content: m.content
+    }))
+  ];
+
+  // Chat Completions API로 요청 (안정적)
+  const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${process.env.PERPLEXITY_API_KEY}`
+      'Authorization': `Bearer ${apiKey}`
     },
     body: JSON.stringify({
-      model: 'sonar-pro',
+      model: 'gpt-4.1',
       stream: true,
-      messages: [
-        {
-          role: 'system',
-          content: `당신은 Jung's Research Assistant입니다. 연구자의 질문에 친절하고 전문적으로 답변하며, 논문 검색, 요약, 인용, 참고문헌 정리를 도와줍니다. 정보를 찾을 때에는 한국 뿐 아니라 국제적으로 유명한 정보들을 찾으세요.
-
-**응답 형식 가이드라인:**
-1. 응답을 논리적인 섹션으로 나누어 구성하세요
-2. 각 섹션에는 적절한 이모지를 포함한 제목을 사용하세요 (예: 🔬 연구 동향, 📊 주요 발견, 💡 시사점 등)
-3. 각 섹션 내용은 불릿 포인트(•)로 정리하세요
-4. 섹션 간에는 빈 줄을 두어 가독성을 높이세요
-5. 중요한 정보는 **볼드체**로 강조하세요
-6. 필요시 표나 리스트 형태로 정보를 정리하세요
-
-**예시 응답 구조:**
-🔬 **주요 연구 결과**
-• 첫 번째 주요 발견
-• 두 번째 주요 발견
-
-📊 **통계 및 데이터**
-• 관련 수치나 통계
-• 비교 분석 결과
-
-💡 **시사점 및 결론**
-• 연구의 의미
-• 향후 전망
-
-사용자가 간단한 인사(예: 안녕, 안녕하세요 등)를 입력하면, 사전적 의미 설명이 아닌 따뜻한 인사로 간단히 응답하세요. 예) "안녕하세요! 무엇을 도와드릴까요?"`
-        },
-        ...mergedMessages
+      tools: [
+        { "type": "web_search" }
       ],
-      options: {
-        citations: true  // Enable citations in the response
-      }
+      input: formattedInput
     })
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    const msg = `Request to Perplexity failed (${response.status}): ${errorText}`;
+    const msg = `Request to OpenAI failed (${response.status}): ${errorText}`;
     return new Response(msg, {
       status: 200,
       headers: { 'Content-Type': 'text/plain; charset=utf-8' },
     });
   }
 
-  // Perplexity returns an SSE stream (lines starting with "data:")
+  // 스트리밍 응답 처리
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
-
-  // Accumulators for citations and search results emitted by Perplexity.
-  const collectedCitations: any[] = []; // May contain citation identifiers or URLs or objects depending on model
-  const collectedSearchResults: any[] = []; // Objects containing { title, url, ... }
-
+  const collectedAnnotations: any[] = [];
   let remainder = '';
 
   const transformStream = new TransformStream({
     transform(chunk, controller) {
-      // Append new chunk to any leftover data from previous chunk
       const text = remainder + decoder.decode(chunk, { stream: true });
-
-      // Split into lines; the last element may be incomplete
       const parts = text.split('\n');
       remainder = parts.pop() ?? '';
 
       for (const line of parts) {
-        // Perplexity sends "data:" JSON chunks and finally "data: [DONE]".
         if (line.startsWith('data:')) {
-          // Handle the [DONE] sentinel – we'll flush in the separate flush() callback.
           if (line.trim() === 'data:[DONE]' || line.trim() === 'data: [DONE]') {
             continue;
           }
 
           try {
-            // Remove the leading 'data:' prefix and any whitespace after it.
             const jsonStr = line.slice(5).trimStart();
-            const data = JSON.parse(jsonStr);
+            const event = JSON.parse(jsonStr);
 
-            // Stream the partial content tokens to the client.
-            const deltaContent = data.choices?.[0]?.delta?.content;
-            if (deltaContent) {
-              controller.enqueue(encoder.encode(deltaContent));
+            // Debug: responses API 구조 확인
+            console.log('Responses API event:', JSON.stringify(event, null, 2));
+
+            // responses API 이벤트 기반 처리
+            if (event.type === 'response.output_text.delta' && event.delta) {
+              controller.enqueue(encoder.encode(event.delta));
+            }
+            // 대안적인 구조들도 확인
+            else if (event.delta?.content) {
+              controller.enqueue(encoder.encode(event.delta.content));
+            }
+            else if (event.content) {
+              controller.enqueue(encoder.encode(event.content));
+            }
+            // 기존 chat completions 구조도 유지 (호환성)
+            else if (event.choices?.[0]?.delta?.content) {
+              controller.enqueue(encoder.encode(event.choices[0].delta.content));
             }
 
-            // Accumulate citations if they appear inside delta (rare) or top-level.
-            const deltaCitations = data.choices?.[0]?.delta?.citations ?? data.citations;
-            if (Array.isArray(deltaCitations) && deltaCitations.length > 0) {
-              collectedCitations.push(...deltaCitations);
+            // annotations 처리 (responses API 구조)
+            if (event.annotations && Array.isArray(event.annotations)) {
+              collectedAnnotations.push(...event.annotations);
+            }
+            // 기존 구조도 유지
+            else if (event.choices?.[0]?.message?.annotations) {
+              collectedAnnotations.push(...event.choices[0].message.annotations);
+            }
+            else if (event.choices?.[0]?.delta?.annotations) {
+              collectedAnnotations.push(...event.choices[0].delta.annotations);
             }
 
-            // Accumulate search_results if present (title + url information).
-            if (Array.isArray(data.search_results) && data.search_results.length > 0) {
-              collectedSearchResults.push(...data.search_results);
-            }
           } catch (e) {
-            // Ignore JSON parse errors which can happen on partial chunks.
+            console.log('JSON parse error:', e.message, 'Line:', line);
           }
         }
       }
     },
 
     flush(controller) {
-      // Process any leftover data in remainder
       if (remainder.startsWith('data:')) {
         try {
-          const data = JSON.parse(remainder.slice(5).trimStart());
-          if (data.choices?.[0]?.delta?.content) {
-            controller.enqueue(encoder.encode(data.choices[0].delta.content));
+          const event = JSON.parse(remainder.slice(5).trimStart());
+          
+          // responses API 이벤트 기반 처리
+          if (event.type === 'response.output_text.delta' && event.delta) {
+            controller.enqueue(encoder.encode(event.delta));
           }
-          const deltaCitations = data.choices?.[0]?.delta?.citations ?? data.citations;
-          if (Array.isArray(deltaCitations) && deltaCitations.length > 0) collectedCitations.push(...deltaCitations);
-          if (Array.isArray(data.search_results) && data.search_results.length > 0) collectedSearchResults.push(...data.search_results);
+          // 대안적인 구조들도 확인
+          else if (event.delta?.content) {
+            controller.enqueue(encoder.encode(event.delta.content));
+          }
+          else if (event.content) {
+            controller.enqueue(encoder.encode(event.content));
+          }
+          // 기존 chat completions 구조도 유지
+          else if (event.choices?.[0]?.delta?.content) {
+            controller.enqueue(encoder.encode(event.choices[0].delta.content));
+          }
+          
+          // annotations 처리
+          if (event.annotations && Array.isArray(event.annotations)) {
+            collectedAnnotations.push(...event.annotations);
+          }
+          else if (event.choices?.[0]?.message?.annotations) {
+            collectedAnnotations.push(...event.choices[0].message.annotations);
+          }
+          else if (event.choices?.[0]?.delta?.annotations) {
+            collectedAnnotations.push(...event.choices[0].delta.annotations);
+          }
         } catch (e) {
           // ignore
         }
       }
 
-      // Build a unique list of citations with titles & URLs if possible.
-      // Strategy: If search_results available, use them for rich info;
-      // otherwise treat collectedCitations as URLs and render those.
-
+      // Process citations
       const unique: { url: string; title: string }[] = [];
 
-      if (collectedSearchResults.length > 0) {
-        for (const sr of collectedSearchResults) {
-          if (!sr.url) continue;
-          if (unique.some((u) => u.url === sr.url)) continue;
-          unique.push({ url: sr.url, title: sr.title || sr.url });
-        }
-      } else if (collectedCitations.length > 0) {
-        for (const cite of collectedCitations) {
-          const url = typeof cite === 'string' ? cite : cite?.url;
-          if (!url) continue;
-          if (unique.some((u) => u.url === url)) continue;
-          unique.push({ url, title: url });
+      if (collectedAnnotations.length > 0) {
+        for (const annotation of collectedAnnotations) {
+          if (annotation.type === 'url_citation' && annotation.url_citation) {
+            const { url, title } = annotation.url_citation;
+            if (!url) continue;
+            // Filter out Korean sites
+            if (url.includes('.kr') || url.includes('naver.com') || url.includes('daum.net') || 
+                url.includes('chosun.com') || url.includes('joongang.co.kr')) {
+              continue;
+            }
+            if (unique.some((u) => u.url === url)) continue;
+            unique.push({ url, title: title || url });
+          }
         }
       }
 
       if (unique.length > 0) {
-        const citationLines = unique.map((c, idx) => `- [${idx + 1}] ${c.title ? `[${c.title}](${c.url})` : c.url}`);
-        const citationsText = `\n\n참고문헌:\n${citationLines.join('\n')}`;
-        controller.enqueue(encoder.encode(citationsText));
+        // Filter for academic sites
+        const validCitations = unique.filter(c => 
+          c.url.includes('nature.com') || c.url.includes('science.org') || 
+          c.url.includes('cell.com') || c.url.includes('nejm.org') || 
+          c.url.includes('thelancet.com') || c.url.includes('arxiv.org') ||
+          c.url.includes('biorxiv.org') || c.url.includes('medrxiv.org') ||
+          c.url.includes('pnas.org') || c.url.includes('ieee.org') || 
+          c.url.includes('acm.org') || c.url.includes('springer.com') ||
+          c.url.includes('wiley.com') || c.url.includes('elsevier.com') ||
+          c.url.includes('taylor') || c.url.includes('sage') ||
+          c.url.includes('oxford') || c.url.includes('cambridge') ||
+          c.url.includes('.edu') || c.url.includes('pubmed') ||
+          c.url.includes('doi.org') || c.url.includes('researchgate') ||
+          (!c.url.includes('.kr') && !c.url.includes('naver.com') && 
+           !c.url.includes('daum.net') && !c.url.includes('chosun.com') && 
+           !c.url.includes('joongang.co.kr'))
+        );
+
+        if (validCitations.length > 0) {
+          const citationLines = validCitations.map((c, idx) => `- [${idx + 1}] ${c.title ? `[${c.title}](${c.url})` : c.url}`);
+          const citationsText = `\n\n📚 **References (International Journals):**\n${citationLines.join('\n')}`;
+          controller.enqueue(encoder.encode(citationsText));
+        }
       }
     },
   });
