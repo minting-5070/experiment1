@@ -121,7 +121,7 @@ export async function POST(req: Request) {
             }
 
           } catch (e) {
-            console.log('JSON parse error:', e.message, 'Line:', line);
+            console.log('JSON parse error:', e instanceof Error ? e.message : 'Unknown error', 'Line:', line);
           }
         }
       }
@@ -159,7 +159,7 @@ export async function POST(req: Request) {
             collectedAnnotations.push(...event.choices[0].delta.annotations);
           }
         } catch (e) {
-          // ignore
+          // ignore parse errors
         }
       }
 
