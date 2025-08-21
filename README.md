@@ -1,58 +1,118 @@
-# Jung's Research Assistant
+# Research Assistant - Academic AI Assistant
 
-Azure OpenAI API를 사용하는 논문 검색 AI 어시스턴트입니다.
+A sophisticated AI assistant specialized in academic research, leveraging top-tier journals and high-impact papers to provide credible, peer-reviewed information.
 
-## Getting Started
+## 🔬 Features
 
-### 1. 환경 변수 설정
+- **Academic Excellence**: Prioritizes top-tier journals (Nature, Science, Cell, UTD 24, etc.)
+- **High-Impact Sources**: Focuses on papers with high impact factors (IF > 3.0)
+- **Peer-Reviewed Only**: Exclusively cites peer-reviewed publications
+- **Credibility First**: Advanced filtering for reliable academic sources
+- **Journal Rankings**: Built-in journal ranking and impact factor information
+- **GPT-4o Powered**: Utilizes the latest OpenAI GPT-4o model
 
-프로젝트 루트에 `.env.local` 파일을 생성하고 다음 내용을 추가하세요:
+## 🚀 Quick Start
+
+### 1. Environment Setup
+
+Create a `.env.local` file in the project root:
 
 ```bash
-# Azure OpenAI API 설정
-AZURE_OPENAI_API_KEY=your-api-key-here
-
-# Azure OpenAI 엔드포인트 (예: https://your-resource-name.openai.azure.com)
-AZURE_OPENAI_ENDPOINT=https://your-resource-name.openai.azure.com
-
-# Azure OpenAI 배포 이름 (예: gpt-35-turbo)
-AZURE_OPENAI_DEPLOYMENT=gpt-35-turbo
+# OpenAI API Configuration
+OPENAI_API_KEY=your_openai_api_key_here
 ```
 
-**중요**: 
-- `AZURE_OPENAI_API_KEY`를 실제 Azure OpenAI API 키로 변경하세요
-- `AZURE_OPENAI_ENDPOINT`를 실제 Azure OpenAI 리소스의 엔드포인트로 변경하세요
-- `AZURE_OPENAI_DEPLOYMENT`를 실제 배포 이름으로 변경하세요
+**Get your API key from**: [OpenAI Platform](https://platform.openai.com/api-keys)
 
-### 2. 개발 서버 실행
+### 2. Installation & Development
 
 ```bash
+# Install dependencies
+npm install
+
+# Run development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) to access the application.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 📚 Academic Sources
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Top Science Journals
+- **Nature** (IF: 69.5) - World's premier science journal
+- **Science** (IF: 63.8) - AAAS flagship publication
+- **Cell** (IF: 66.9) - Leading cell biology journal
+- **NEJM** (IF: 158.5) - Top medical journal
+- **The Lancet** (IF: 202.7) - Premier medical publication
 
-## Learn More
+### Business & Management (UTD 24)
+- **Academy of Management Journal** - Top management journal
+- **Strategic Management Journal** - Strategy research leader
+- **Management Science** - Analytics and operations
+- **Journal of Marketing** - Marketing research authority
+- **American Economic Review** - Premier economics journal
 
-To learn more about Next.js, take a look at the following resources:
+## 🛠 Tech Stack
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **Framework**: Next.js 15 with App Router
+- **AI Model**: OpenAI GPT-4o
+- **Styling**: Tailwind CSS
+- **UI Components**: Radix UI
+- **Markdown**: React Markdown with GFM support
+- **TypeScript**: Full type safety
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 🌐 Deployment
 
-## Deploy on Vercel
+### Deploy to Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. **Push to GitHub**:
+   ```bash
+   git init
+   git add .
+   git commit -m "Initial commit: Research Assistant"
+   git branch -M main
+   git remote add origin https://github.com/yourusername/research-assistant.git
+   git push -u origin main
+   ```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+2. **Deploy on Vercel**:
+   - Visit [vercel.com](https://vercel.com)
+   - Import your GitHub repository
+   - Add environment variable: `OPENAI_API_KEY`
+   - Deploy!
+
+### Environment Variables for Production
+
+In Vercel dashboard, add:
+- `OPENAI_API_KEY`: Your OpenAI API key
+
+## 📖 Usage
+
+Simply ask any research question or request academic analysis:
+
+- "What are the latest developments in AI creativity?"
+- "Analyze the impact of ESG on corporate performance"
+- "Review literature on quantum computing applications"
+- "Find recent papers on sustainable supply chain management"
+
+The assistant will automatically:
+- Search top-tier academic sources
+- Prioritize high-impact publications
+- Provide credible citations
+- Format responses with proper academic structure
+
+## 🔍 Quality Standards
+
+- **Impact Factor Priority**: Prefers journals with IF > 3.0
+- **Citation Requirements**: Substantial citation counts required
+- **Recency Preference**: Prioritizes papers from last 10 years
+- **Peer Review Verification**: Only peer-reviewed publications
+- **Predatory Journal Exclusion**: Filters out questionable venues
+
+## 📄 License
+
+MIT License - feel free to use for academic and research purposes.
+
+## 🤝 Contributing
+
+Contributions welcome! Please feel free to submit pull requests or open issues for improvements.

@@ -49,7 +49,7 @@ export async function POST(req: Request) {
       'Authorization': `Bearer ${apiKey}`
     },
     body: JSON.stringify({
-      model: 'gpt-4.1',
+      model: 'gpt-4o',
       stream: true,
       tools: [
         { "type": "web_search" }
@@ -183,27 +183,37 @@ export async function POST(req: Request) {
       }
 
       if (unique.length > 0) {
-        // Filter for academic sites
-        const validCitations = unique.filter(c => 
-          c.url.includes('nature.com') || c.url.includes('science.org') || 
-          c.url.includes('cell.com') || c.url.includes('nejm.org') || 
-          c.url.includes('thelancet.com') || c.url.includes('arxiv.org') ||
-          c.url.includes('biorxiv.org') || c.url.includes('medrxiv.org') ||
-          c.url.includes('pnas.org') || c.url.includes('ieee.org') || 
-          c.url.includes('acm.org') || c.url.includes('springer.com') ||
-          c.url.includes('wiley.com') || c.url.includes('elsevier.com') ||
-          c.url.includes('taylor') || c.url.includes('sage') ||
-          c.url.includes('oxford') || c.url.includes('cambridge') ||
-          c.url.includes('.edu') || c.url.includes('pubmed') ||
-          c.url.includes('doi.org') || c.url.includes('researchgate') ||
-          (!c.url.includes('.kr') && !c.url.includes('naver.com') && 
-           !c.url.includes('daum.net') && !c.url.includes('chosun.com') && 
-           !c.url.includes('joongang.co.kr'))
-        );
+        // Filter for TOP-TIER academic sites only
+        const topTierSites = [
+          // Top Science Journals
+          'nature.com', 'science.org', 'cell.com', 'nejm.org', 'thelancet.com', 'pnas.org',
+          // Preprint servers
+          'arxiv.org', 'biorxiv.org', 'medrxiv.org',
+          // Academic databases
+          'pubmed', 'doi.org', 'ieee.org', 'acm.org',
+          // Top publishers
+          'springer.com', 'wiley.com', 'elsevier.com', 'oxford', 'cambridge',
+          // Business journals
+          'journals.aom.org', 'onlinelibrary.wiley.com', 'informs.org',
+          // University sites
+          '.edu'
+        ];
+        
+        const validCitations = unique.filter(c => {
+          // Exclude Korean sites
+          if (c.url.includes('.kr') || c.url.includes('naver.com') || 
+              c.url.includes('daum.net') || c.url.includes('chosun.com') || 
+              c.url.includes('joongang.co.kr')) {
+            return false;
+          }
+          
+          // Only include top-tier academic sites
+          return topTierSites.some(site => c.url.includes(site));
+        });
 
         if (validCitations.length > 0) {
           const citationLines = validCitations.map((c, idx) => `- [${idx + 1}] ${c.title ? `[${c.title}](${c.url})` : c.url}`);
-          const citationsText = `\n\n📚 **References (International Journals):**\n${citationLines.join('\n')}`;
+          const citationsText = `\n\n📚 **References (Top-Tier Academic Sources):**\n${citationLines.join('\n')}`;
           controller.enqueue(encoder.encode(citationsText));
         }
       }

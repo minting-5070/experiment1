@@ -44,12 +44,27 @@ function formatReferences(content: string) {
     return num.split('').map(d=>supMap[d]||d).join('');
   };
 
-  // Convert citation numbers into superscript 🔗 icon links
+  // Convert citation numbers into superscript 🔗 icon links with credibility indicators
   let mainContent = mainContentRaw.replace(/\[(\d+)\]/g, (_m, n) => {
     const url = citationMap[n];
     if (!url) return '';
     const supNum = superscript(n);
-    return `<sup><a href=\"${url}\" target=\"_blank\" rel=\"noopener noreferrer\" class=\"text-blue-400 hover:text-blue-300\">🔗${supNum}</a></sup>`;
+    
+    // Determine credibility level based on domain
+    let credibilityClass = 'text-blue-400 hover:text-blue-300';
+    let credibilityIcon = '🔗';
+    
+    if (url.includes('nature.com') || url.includes('science.org') || url.includes('cell.com') || 
+        url.includes('nejm.org') || url.includes('thelancet.com')) {
+      credibilityClass = 'text-green-400 hover:text-green-300';
+      credibilityIcon = '⭐';
+    } else if (url.includes('pnas.org') || url.includes('arxiv.org') || url.includes('pubmed') ||
+               url.includes('doi.org') || url.includes('.edu')) {
+      credibilityClass = 'text-yellow-400 hover:text-yellow-300';
+      credibilityIcon = '📚';
+    }
+    
+    return `<sup><a href=\"${url}\" target=\"_blank\" rel=\"noopener noreferrer\" class=\"${credibilityClass}\" title=\"신뢰성 높은 학술 소스\">${credibilityIcon}${supNum}</a></sup>`;
   });
 
   // Ensure paragraphs are separated by a blank line for readability

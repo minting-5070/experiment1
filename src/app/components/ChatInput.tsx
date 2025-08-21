@@ -35,7 +35,7 @@ export default function ChatInput({ input, handleInputChange, handleSubmit, isLo
               }
             }}
             disabled={isLoading}
-            placeholder="Search for papers, ask questions, or get help with citations..."
+            placeholder="Ask me anything - questions, research, analysis, or any topic you need help with..."
             className="w-full resize-none border-0 bg-transparent placeholder:text-muted-foreground focus:outline-none focus:ring-0 text-lg leading-relaxed max-h-40 overflow-y-auto"
             rows={2}
             style={{ minHeight: '56px' }}

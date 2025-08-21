@@ -4,6 +4,7 @@ import { useChat } from 'ai/react';
 import ChatInput from './components/ChatInput';
 import ChatMessages from './components/ChatMessages';
 import { useRef, useEffect, useState } from 'react';
+import JournalRankingInfo from './components/JournalRankingInfo';
 
 export default function Home() {
   const {
@@ -18,6 +19,9 @@ export default function Home() {
   const [displayMessages, setDisplayMessages] = useState(messages);
   const [isThinking, setIsThinking] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // 연구 모드는 항상 활성화 (자동)
+  const [showJournalInfo, setShowJournalInfo] = useState(false);
 
   // 새 메시지가 추가될 때 자동으로 스크롤
   const scrollToBottom = () => {
@@ -75,6 +79,13 @@ export default function Home() {
               </div>
             </div>
             <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setShowJournalInfo(true)}
+                className="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                title="Journal Rankings & Impact Factors"
+              >
+                📚 Journals
+              </button>
               {displayMessages.length > 0 && (
                 <button
                   onClick={clearChat}
@@ -157,6 +168,11 @@ export default function Home() {
           </div>
         )}
       </div>
+      
+      <JournalRankingInfo
+        isOpen={showJournalInfo}
+        onClose={() => setShowJournalInfo(false)}
+      />
     </div>
   );
 }
