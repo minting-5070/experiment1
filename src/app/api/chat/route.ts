@@ -54,7 +54,7 @@ export async function POST(req: Request) {
 
   // 요청 바디 공통 부분
   const requestBodyBase = {
-    model: 'gpt-4o',
+    model: 'gpt-5',
     tools: [
       {
         type: 'web_search'
