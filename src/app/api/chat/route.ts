@@ -41,25 +41,90 @@ export async function POST(req: Request) {
     }))
   ];
 
-  // Chat Completions API로 요청 (안정적)
+  // 요청 헤더 구성 (조직/프로젝트 헤더는 선택)
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${apiKey}`,
+    'OpenAI-Beta': 'responses=1'
+  };
+  const orgId = process.env.OPENAI_ORG_ID;
+  if (orgId) headers['OpenAI-Organization'] = orgId;
+  const projectId = process.env.OPENAI_PROJECT;
+  if (projectId) headers['OpenAI-Project'] = projectId;
+
+  // 요청 바디 공통 부분
+  const requestBodyBase = {
+    model: 'gpt-5',
+    tools: [
+      {
+        type: 'web_search'
+      }
+    ],
+    input: formattedInput
+  } as const;
+
+  // 1차: 스트리밍 시도
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    },
+    headers,
     body: JSON.stringify({
-      model: 'gpt-4o',
-      stream: true,
-      tools: [
-        { "type": "web_search" }
-      ],
-      input: formattedInput
+      ...requestBodyBase,
+      stream: true
     })
   });
 
   if (!response.ok) {
     const errorText = await response.text();
+    // 스트리밍이 제한된 경우 자동으로 비스트리밍 모드로 재시도
+    const shouldRetryWithoutStream =
+      errorText.includes('must be verified to stream') ||
+      errorText.includes('param') && errorText.includes('stream') ||
+      errorText.includes('unsupported_value');
+
+    if (shouldRetryWithoutStream) {
+      const nonStreamResp = await fetch('https://api.openai.com/v1/responses', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          ...requestBodyBase,
+          stream: false
+        })
+      });
+
+      if (!nonStreamResp.ok) {
+        const nonStreamErr = await nonStreamResp.text();
+        const msg = `Request to OpenAI failed (${nonStreamResp.status}): ${nonStreamErr}`;
+        return new Response(msg, {
+          status: 200,
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        });
+      }
+
+      // 비스트리밍 응답 파싱 후 텍스트로 반환
+      const data = await nonStreamResp.json();
+      let outputText = '';
+      try {
+        if (typeof data?.output_text === 'string') {
+          outputText = data.output_text;
+        } else if (Array.isArray(data?.output_text)) {
+          outputText = data.output_text.join('');
+        } else if (typeof data?.content === 'string') {
+          outputText = data.content;
+        } else if (data?.choices?.[0]?.message?.content) {
+          outputText = data.choices[0].message.content;
+        } else {
+          outputText = JSON.stringify(data);
+        }
+      } catch {
+        outputText = typeof data === 'string' ? data : JSON.stringify(data);
+      }
+
+      return new Response(outputText, {
+        status: 200,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+      });
+    }
+
     const msg = `Request to OpenAI failed (${response.status}): ${errorText}`;
     return new Response(msg, {
       status: 200,
@@ -108,6 +173,26 @@ export async function POST(req: Request) {
               controller.enqueue(encoder.encode(event.choices[0].delta.content));
             }
 
+            // 웹 검색 결과 및 annotations 처리 (responses API 구조)
+            if (event.type === 'response.tool_calls.delta' && event.tool_calls) {
+              // 웹 검색 도구 호출 결과 처리
+              for (const toolCall of event.tool_calls) {
+                if (toolCall.type === 'web_search' && toolCall.web_search?.results) {
+                  for (const result of toolCall.web_search.results) {
+                    if (result.url && result.title) {
+                      collectedAnnotations.push({
+                        type: 'url_citation',
+                        url_citation: {
+                          url: result.url,
+                          title: result.title
+                        }
+                      });
+                    }
+                  }
+                }
+              }
+            }
+            
             // annotations 처리 (responses API 구조)
             if (event.annotations && Array.isArray(event.annotations)) {
               collectedAnnotations.push(...event.annotations);
@@ -146,6 +231,26 @@ export async function POST(req: Request) {
           // 기존 chat completions 구조도 유지
           else if (event.choices?.[0]?.delta?.content) {
             controller.enqueue(encoder.encode(event.choices[0].delta.content));
+          }
+          
+          // 웹 검색 결과 및 annotations 처리
+          if (event.type === 'response.tool_calls.delta' && event.tool_calls) {
+            // 웹 검색 도구 호출 결과 처리
+            for (const toolCall of event.tool_calls) {
+              if (toolCall.type === 'web_search' && toolCall.web_search?.results) {
+                for (const result of toolCall.web_search.results) {
+                  if (result.url && result.title) {
+                    collectedAnnotations.push({
+                      type: 'url_citation',
+                      url_citation: {
+                        url: result.url,
+                        title: result.title
+                      }
+                    });
+                  }
+                }
+              }
+            }
           }
           
           // annotations 처리
@@ -211,10 +316,38 @@ export async function POST(req: Request) {
           return topTierSites.some(site => c.url.includes(site));
         });
 
-        if (validCitations.length > 0) {
-          const citationLines = validCitations.map((c, idx) => `- [${idx + 1}] ${c.title ? `[${c.title}](${c.url})` : c.url}`);
-          const citationsText = `\n\n📚 **References (Top-Tier Academic Sources):**\n${citationLines.join('\n')}`;
-          controller.enqueue(encoder.encode(citationsText));
+        // 모든 웹 검색 결과 표시 (학술 사이트 우선, 일반 사이트도 포함)
+        const allValidCitations = unique.filter(c => {
+          // 한국 사이트만 제외
+          return !(c.url.includes('.kr') || c.url.includes('naver.com') || 
+                   c.url.includes('daum.net') || c.url.includes('chosun.com') || 
+                   c.url.includes('joongang.co.kr'));
+        });
+
+        if (allValidCitations.length > 0) {
+          // 학술 사이트와 일반 사이트 분리
+          const academicCitations = allValidCitations.filter(c => 
+            topTierSites.some(site => c.url.includes(site))
+          );
+          const generalCitations = allValidCitations.filter(c => 
+            !topTierSites.some(site => c.url.includes(site))
+          );
+
+          let citationsText = '';
+          
+          if (academicCitations.length > 0) {
+            const academicLines = academicCitations.map((c, idx) => `- [${idx + 1}] ${c.title ? `[${c.title}](${c.url})` : c.url}`);
+            citationsText += `\n\n📚 **Academic References:**\n${academicLines.join('\n')}`;
+          }
+          
+          if (generalCitations.length > 0) {
+            const generalLines = generalCitations.map((c, idx) => `- [${idx + academicCitations.length + 1}] ${c.title ? `[${c.title}](${c.url})` : c.url}`);
+            citationsText += `\n\n🔍 **Web Search Results:**\n${generalLines.join('\n')}`;
+          }
+          
+          if (citationsText) {
+            controller.enqueue(encoder.encode(citationsText));
+          }
         }
       }
     },
